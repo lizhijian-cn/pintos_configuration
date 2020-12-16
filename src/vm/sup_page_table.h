@@ -37,7 +37,7 @@ struct sup_page_table_entry *spt_lookup (struct hash *spt, void *upage);
 
 void spt_get_page_empty (struct hash *spt, void *upage);
 
-void spt_get_page_filesys (struct hash *supt, void *upage, struct file *file, 
+bool spt_get_page_filesys (struct hash *supt, void *upage, struct file *file, 
                            off_t file_size, bool writable);
 
 void spt_free_page (struct hash *spt, void *upage);                          

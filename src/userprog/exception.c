@@ -193,8 +193,6 @@ page_fault (struct intr_frame *f)
             {
               ft_free_frame (frame);
               return;
-              // spt_free_page (&cur->spt, upage);
-              // memset (frame, 0, PGSIZE);
             }
           else
             memset (frame + spte->read_bytes, 0, spte->zero_bytes);
@@ -207,8 +205,6 @@ page_fault (struct intr_frame *f)
   bool access = pagedir_set_page (cur->pagedir, upage, frame, true);
   if (access)
     return;
-
-  return;
 
 failed:
   /* To implement virtual memory, delete the rest of the function

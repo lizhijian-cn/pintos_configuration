@@ -13,6 +13,7 @@
 #include "userprog/process_file.h"
 #include "userprog/process.h"
 #include "vm/sup_page_table.h"
+#include "vm/mmap.h"
 
 static void syscall_handler (struct intr_frame *f);
 
@@ -244,12 +245,7 @@ open (const char *file_name)
     return -1;
   
   struct thread *cur = thread_current ();
-  /* memory alloc */
-  struct process_file *pfile = malloc (sizeof (struct process_file));
-  pfile->file = file;
-  pfile->fd = cur->fd++;
-  list_push_back (&cur->open_file_list, &pfile->elem);
-  return pfile->fd;
+  return process_file_open (cur, file);
 }
 
 int
@@ -324,21 +320,17 @@ close (int fd)
   process_file_close (pfile);
 }
 
-struct mmap
-  {
-    int mapid;
-    struct file *file;
-    off_t file_size;
-    void *upage;
-    struct list_elem elem;
-  };
-
 int
 mmap(int fd, void* addr)
 {
   if (fd == 0 || fd == 1)
     return -1;
   
+  if (addr == NULL || pg_ofs (addr) != 0)
+    return -1;
+
+  if (addr < (void *) 0x10000000)
+    return -1;
   struct process_file *pfile = get_process_file_by_fd (thread_current (), fd);
   if (pfile == NULL)
     return -1;
@@ -349,29 +341,7 @@ mmap(int fd, void* addr)
     return -1;
   
   struct thread *cur = thread_current ();
-  spt_get_page_filesys (&cur->spt, addr, file, file_size, true);
-
-  struct mmap *mmap = malloc (sizeof (struct mmap));
-  mmap->mapid = cur->mapid++;
-  mmap->file = file;
-  mmap->file_size = file_size;
-  mmap->upage = addr;
-  list_push_back (&cur->mmap_list, &mmap->elem);
-
-  return mmap->mapid;
-}
-
-static struct mmap *
-get_mmap_by_mapid (struct thread *t, int mapid)
-{
-  struct list *mmap_list = &t->mmap_list;
-  for (struct list_elem *e = list_begin (mmap_list); e != list_end (mmap_list); e = list_next (e))
-    {
-      struct mmap *mmap = list_entry (e, struct mmap, elem);
-      if (mmap->mapid == mapid)
-        return mmap;
-    }      
-  return NULL;
+  return mmap_open (cur, file, file_size, addr);
 }
 
 void
@@ -383,8 +353,5 @@ munmap (int mapid)
   if (mmap == NULL)
     return;
   
-  spt_free_page_filesys (&cur->spt, mmap->upage, mmap->file_size);
-  list_remove (&mmap->elem);
-  free(mmap->file);
-  free (mmap);                    
+  mmap_close (cur, mmap);                   
 }
