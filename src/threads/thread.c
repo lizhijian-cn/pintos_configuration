@@ -14,6 +14,9 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
+#ifdef VM
+#include "vm/sup_page_table.h"
+#endif
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -201,6 +204,10 @@ thread_create (const char *name, int priority,
   sema_init (&t->load_sema, 0);
 
   sema_init (&t->wait_sema, 0);
+
+  list_init (&t->mmap_list);
+  t->mapid = 0;
+  spt_init (&t->spt);
 #endif
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);

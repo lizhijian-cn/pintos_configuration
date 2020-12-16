@@ -1,9 +1,17 @@
 #include "userprog/exception.h"
 #include <inttypes.h>
 #include <stdio.h>
+#include <string.h>
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
+#include "threads/palloc.h"
+#include "threads/malloc.h"
+#include "userprog/pagedir.h"
+#include "userprog/syscall.h"
+#include "vm/sup_page_table.h"
+#include "vm/frame_table.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -89,8 +97,7 @@ kill (struct intr_frame *f)
       printf ("%s: dying due to interrupt %#04x (%s).\n",
               thread_name (), f->vec_no, intr_name (f->vec_no));
       intr_dump_frame (f);
-      thread_current ()->status_code = -1;
-      thread_exit (); 
+      exit (-1);
 
     case SEL_KCSEG:
       /* Kernel's code segment, which indicates a kernel bug.
@@ -148,7 +155,62 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
+  
+  // printf ("esp: %p\nfault_addr: %p\nup: %p\ndown: %p\n", f->esp, fault_addr, pg_round_down (fault_addr), pg_round_down (f->esp));
+  if (!not_present)
+    goto failed;
+      // check if bottom of user stack
+      // void *upage = pg_round_down (fault_addr);
+      // void *kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+      // bool access = pagedir_set_page (thread_current ()->pagedir, upage, kpage, true);
+      // if (access)
+      //     return;
+  void *upage = pg_round_down (fault_addr);
+  struct thread *cur = thread_current ();
+  struct sup_page_table_entry *spte = spt_lookup (&cur->spt, upage);
+  void *frame = ft_get_frame ();
+  bool grow_stack_contiguous = fault_addr >= (f->esp - 32);
+  if (spte == NULL)
+    {
+      if (!is_valid_user_vaddr (fault_addr) || !grow_stack_contiguous)
+        goto failed;
 
+      spt_get_page_empty (&cur->spt, upage);
+      spte = spt_lookup (&cur->spt, upage);
+    }
+
+  switch (spte->status)
+    {
+      case EMPTY:
+        {
+          memset (frame, 0, PGSIZE);
+          break;
+        }
+      case FROM_FILESYS:
+        {
+          file_seek (spte->file, spte->file_offset);
+          if (file_read (spte->file, frame, spte->read_bytes) != (off_t) spte->read_bytes)
+            {
+              ft_free_frame (frame);
+              return;
+              // spt_free_page (&cur->spt, upage);
+              // memset (frame, 0, PGSIZE);
+            }
+          else
+            memset (frame + spte->read_bytes, 0, spte->zero_bytes);
+          break;
+        }
+      default:
+        PANIC ("TODO SWAP");
+    }
+  spte->frame = frame;
+  bool access = pagedir_set_page (cur->pagedir, upage, frame, true);
+  if (access)
+    return;
+
+  return;
+
+failed:
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */

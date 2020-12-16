@@ -3,6 +3,7 @@
 
 #include <debug.h>
 #include <list.h>
+#include <hash.h>
 #include <stdint.h>
 #include "threads/synch.h"
 
@@ -115,6 +116,11 @@ struct thread
     struct file *self_file;
 #endif
 
+#ifdef VM
+    struct hash spt;
+    int mapid;
+    struct list mmap_list;
+#endif
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };

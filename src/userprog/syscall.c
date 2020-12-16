@@ -12,6 +12,7 @@
 #include "userprog/pagedir.h"
 #include "userprog/process_file.h"
 #include "userprog/process.h"
+#include "vm/sup_page_table.h"
 
 static void syscall_handler (struct intr_frame *f);
 
@@ -35,7 +36,8 @@ int write (int fd, const void *buffer, unsigned size);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
-
+int mmap(int fd, void* addr);
+void munmap(int mapping);
 
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
@@ -153,6 +155,23 @@ syscall_handler (struct intr_frame *f UNUSED)
           close (args[0]);
           break;
         }
+      // mapid_t mmap(int fd, void* addr)
+      case SYS_MMAP:
+        {
+          get_args (f, args, 2);
+          int fd = args[0];
+          void *addr = (void *) args[1];
+          f->eax = mmap (fd, addr);
+          break;
+        }
+      // void munmap(mapid_t mapping)
+      case SYS_MUNMAP:
+        {
+          get_args (f, args, 1);
+          int mapid = args[0];
+          munmap (mapid);
+          break;
+        }
       default:
         printf ("unknown syscall code %d\n", code);
         exit (-1);
@@ -187,7 +206,7 @@ get_args (struct intr_frame *f, int *args, int argc)
 void
 check_valid_addr (const void *ptr)
 {
-  if (ptr == NULL || ptr >= PHYS_BASE || ptr < (void *) 0x08048000)
+  if (!is_valid_user_vaddr (ptr))
     exit (-1);
 
   if (pagedir_get_page (thread_current ()->pagedir, ptr) == NULL)
@@ -303,4 +322,69 @@ close (int fd)
     return;
 
   process_file_close (pfile);
+}
+
+struct mmap
+  {
+    int mapid;
+    struct file *file;
+    off_t file_size;
+    void *upage;
+    struct list_elem elem;
+  };
+
+int
+mmap(int fd, void* addr)
+{
+  if (fd == 0 || fd == 1)
+    return -1;
+  
+  struct process_file *pfile = get_process_file_by_fd (thread_current (), fd);
+  if (pfile == NULL)
+    return -1;
+  
+  struct file *file = file_reopen(pfile->file);
+  off_t file_size = file_length (file);
+  if (file_size == 0)
+    return -1;
+  
+  struct thread *cur = thread_current ();
+  spt_get_page_filesys (&cur->spt, addr, file, file_size, true);
+
+  struct mmap *mmap = malloc (sizeof (struct mmap));
+  mmap->mapid = cur->mapid++;
+  mmap->file = file;
+  mmap->file_size = file_size;
+  mmap->upage = addr;
+  list_push_back (&cur->mmap_list, &mmap->elem);
+
+  return mmap->mapid;
+}
+
+static struct mmap *
+get_mmap_by_mapid (struct thread *t, int mapid)
+{
+  struct list *mmap_list = &t->mmap_list;
+  for (struct list_elem *e = list_begin (mmap_list); e != list_end (mmap_list); e = list_next (e))
+    {
+      struct mmap *mmap = list_entry (e, struct mmap, elem);
+      if (mmap->mapid == mapid)
+        return mmap;
+    }      
+  return NULL;
+}
+
+void
+munmap (int mapid)
+{
+  struct thread *cur = thread_current ();   
+
+  struct mmap *mmap = get_mmap_by_mapid (cur, mapid);
+  if (mmap == NULL)
+    return;
+  
+  spt_free_page_filesys (&cur->spt, mmap->upage, mmap->file_size);
+  list_remove (&mmap->elem);
+  free(mmap->file);
+  free (mmap);                    
 }
