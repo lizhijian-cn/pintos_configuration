@@ -1,6 +1,7 @@
 # VM
 pintos实验三的文档。
 
+<<<<<<< HEAD
 # page fault
 * 检测是否是权限错误
     * 如果是，比如写只读页，直接`exit(-1)`
@@ -45,3 +46,10 @@ pintos实验三的文档。
                 ```
 
 # second-change page-replacement algorithm
+=======
+```c
+
+void *kpage = palloc_get_page(PAL_USER); // get a frame
+pagedir_set_page(cur->pagedir, upage, kpage); // map user page to frame
+```
+>>>>>>> 8e99fb8c6c4cf7f2f33904a9a9f671824a2d6084
