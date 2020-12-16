@@ -9,5 +9,6 @@ struct process_file
   };
 
 struct process_file *get_process_file_by_fd (struct thread *t, int fd);
+int process_file_open (struct thread *t, struct file *file);
 void process_file_close (struct process_file *pfile);
 void close_all_open_file (struct thread *t);

@@ -14,6 +14,16 @@ get_process_file_by_fd (struct thread *t, int fd)
   return NULL;
 }
 
+int
+process_file_open (struct thread *t, struct file *file)
+{
+  struct process_file *pfile = malloc (sizeof (struct process_file));
+  pfile->file = file;
+  pfile->fd = t->fd++;
+  list_push_back (&t->open_file_list, &pfile->elem);
+  return pfile->fd;
+}
+
 void
 process_file_close (struct process_file *pfile)
 {

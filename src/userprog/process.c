@@ -21,6 +21,7 @@
 #include "devices/timer.h"
 #include "userprog/process_file.h"
 #include "threads/malloc.h"
+#include "vm/mmap.h"
 
 static struct hash process_hash;
 
@@ -208,6 +209,7 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   printf ("%s: exit(%d)\n", cur->name, cur->status_code);
+  close_all_mmap (cur);
   uint32_t *pd;
 
   /* Destroy the current process's page directory and switch back
