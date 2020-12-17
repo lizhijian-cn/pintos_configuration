@@ -1,5 +1,3 @@
-#include "frame_table.h"
-
 void swap_init (void);
-void write_from_block (struct frame_table_entry *fte, uint32_t index);
-void write_from_block (struct frame_table_entry *fte, uint32_t index);
+void swap_from_block (void *frame, uint32_t index);
+uint32_t swap_to_block (void *frame);

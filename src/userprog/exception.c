@@ -12,6 +12,7 @@
 #include "userprog/syscall.h"
 #include "vm/sup_page_table.h"
 #include "vm/frame_table.h"
+#include "vm/swap.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -196,6 +197,11 @@ page_fault (struct intr_frame *f)
             }
           else
             memset (frame + spte->read_bytes, 0, spte->zero_bytes);
+          break;
+        }
+      case FROM_SWAP_SLOTS:
+        {
+          swap_from_block (frame, spte->swap_index);
           break;
         }
       default:

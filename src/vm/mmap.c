@@ -18,7 +18,7 @@ get_mmap_by_mapid(struct thread *t, int mapid)
 int
 mmap_open (struct thread *t, struct file *file, off_t file_size, void *upage)
 {
-  if (spt_get_page_filesys (&t->spt, upage, file, file_size, true) == false)
+  if (spt_get_page_filesys_all_file (&t->spt, upage, file, file_size, true) == false)
     return -1;
   struct mmap *mmap = malloc (sizeof (struct mmap));
   mmap->mapid = t->mapid++;

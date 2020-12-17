@@ -22,6 +22,7 @@
 #include "userprog/process_file.h"
 #include "threads/malloc.h"
 #include "vm/mmap.h"
+#include "vm/sup_page_table.h"
 
 static struct hash process_hash;
 
@@ -210,6 +211,7 @@ process_exit (void)
   struct thread *cur = thread_current ();
   printf ("%s: exit(%d)\n", cur->name, cur->status_code);
   close_all_mmap (cur);
+  spt_destroy (&cur->spt);
   uint32_t *pd;
 
   /* Destroy the current process's page directory and switch back
@@ -338,7 +340,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 {
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
-  struct file *file = NULL;
+  struct file *self_file = NULL;
   off_t file_ofs;
   bool success = false;
   int i;
@@ -357,13 +359,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (exec_name);
-  if (file == NULL) 
+  self_file = filesys_open (exec_name);
+  if (self_file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
 
+  struct file *file = file_reopen (self_file);
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -426,8 +429,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
-              if (!load_segment (file, file_page, (void *) mem_page,
-                                 read_bytes, zero_bytes, writable))
+              // if (!load_segment (file, file_page, (void *) mem_page,
+              //                    read_bytes, zero_bytes, writable))
+              if (!spt_get_page_filesys (&thread_current ()->spt, (void *) mem_page, file, file_page,
+                                        read_bytes, zero_bytes, writable))
                 goto done;
             }
           else
@@ -450,12 +455,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* We arrive here whether the load is successful or not. */
   if (success)
     {
-      file_deny_write (file);
-      thread_current ()->self_file = file;
+      file_deny_write (self_file);
+      thread_current ()->self_file = self_file;
     }
   else
     {
-      file_close (file);
+      file_close (self_file);
       thread_current ()->self_file = NULL;
     }
   return success;

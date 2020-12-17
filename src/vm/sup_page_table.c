@@ -88,7 +88,28 @@ spt_get_page_empty (struct hash *spt, void *upage)
 }
 
 bool
-spt_get_page_filesys (struct hash *spt, void *upage, struct file *file, 
+spt_get_page_filesys (struct hash *spt, void *upage, struct file *file, off_t offset, 
+                      size_t read_bytes, size_t zero_bytes, bool writable)
+{
+  struct sup_page_table_entry *spte = malloc (sizeof (struct sup_page_table_entry));
+
+  spte->status = FROM_FILESYS;
+
+  spte->upage = upage + offset;
+  spte->frame = NULL;
+
+  spte->file = file;
+  spte->file_offset = offset;
+  spte->read_bytes = read_bytes;
+  spte->zero_bytes = zero_bytes;
+  spte->writable = writable;
+
+  struct hash_elem *e = hash_insert (spt, &spte->hash_elem);
+  return e == NULL;
+}        
+
+bool
+spt_get_page_filesys_all_file (struct hash *spt, void *upage, struct file *file, 
                       off_t file_size, bool writable)
 {
   for (off_t offset = 0; offset < file_size; offset += PGSIZE)
@@ -96,29 +117,23 @@ spt_get_page_filesys (struct hash *spt, void *upage, struct file *file,
       size_t page_read_bytes = offset + PGSIZE < file_size ? PGSIZE : file_size - offset;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      struct sup_page_table_entry *spte = malloc (sizeof (struct sup_page_table_entry));
-
-      spte->status = FROM_FILESYS;
-
-      spte->upage = upage + offset;
-      spte->frame = NULL; // lazy load
-
-      spte->file = file;
-      spte->file_offset = offset;
-      spte->read_bytes = page_read_bytes;
-      spte->zero_bytes = page_zero_bytes;
-      spte->writable = writable;
-
-      if (hash_insert (spt, &spte->hash_elem) != NULL)
+      if (!spt_get_page_filesys (spt, upage, file, offset, page_read_bytes, page_zero_bytes, writable))
         return false;
     }
   return true;
 }
 
-// void
-// spt_free_page_filesys (struct hash *spt, uint32_t *pagedir, void *upage, 
-//                        struct file *file, off_t file_size)
-// {
+static void
+spte_destroy (struct hash_elem *e, void *aux UNUSED)
+{
+  struct sup_page_table_entry *spte = hash_entry (e, struct sup_page_table_entry, hash_elem);
+  if (spte->frame)
+    ft_free_frame (spte->frame);
+  free (spte);
+}
 
-// }                    
-// , off_t file_offset, size_t read_bytes, size_t zero_bytes, bool writable
+void
+spt_destroy (struct hash *spt)
+{
+  hash_destroy (spt, spte_destroy);
+}

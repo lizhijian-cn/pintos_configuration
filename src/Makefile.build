@@ -66,6 +66,7 @@ userprog_SRC += userprog/process_file.c
 vm_SRC = vm/frame_table.c
 vm_SRC += vm/sup_page_table.c
 vm_SRC += vm/mmap.c
+vm_SRC += vm/swap.c
 
 # Filesystem code.
 filesys_SRC  = filesys/filesys.c	# Filesystem core.
